@@ -34,7 +34,8 @@ export default defineComponent({
                 rotation: 0,
                 altitude: 12,
             },
-            shouldRender: true
+            shouldRender: false,
+            flightStartTime: 0
         };
     },
 
@@ -47,7 +48,6 @@ export default defineComponent({
             pitch: 60,
             canvasContextAttributes: { antialias: true }
         });
-        window.map = map;
         // Define the route as a Turf.js LineString
         const route: turf.helpers.Feature<turf.helpers.LineString> = turf.lineString([
             [-81.4004, 28.5396],
@@ -114,8 +114,8 @@ export default defineComponent({
             renderingMode: '3d',
             onAdd: function (map, gl) {
                 this.clock = new THREE.Clock();
-                this.flightStartTime = null;
-                this.flightDuration = 25; // seconds for full route
+                that.flightStartTime = null;
+                this.flightDuration = 15; // seconds for full route
                 this.helicopter = null;
                 this.helicopterGroup = null;
                 this.camera = new THREE.Camera();
@@ -163,7 +163,7 @@ export default defineComponent({
                         }
 
                         // Start flight animation
-                        this.flightStartTime = performance.now();
+                        that.flightStartTime = performance.now();
                     }
                 );
 
@@ -176,9 +176,10 @@ export default defineComponent({
                 this.renderer.autoClear = false;
             },
             render: function (gl, args) {
+                console.log(that.shouldRender)
                 if (that.shouldRender) {
                     const now = performance.now();
-                    const elapsed = (now - this.flightStartTime) / 1000; // in seconds
+                    const elapsed = (now - that.flightStartTime) / 1000; // in seconds
 
                     if (this.mixer) {
                         this.mixer.setTime(elapsed % this.flightDuration); // loop within animation duration
@@ -186,9 +187,9 @@ export default defineComponent({
 
 
                     // Fly along the route
-                    if (this.helicopterGroup && this.flightStartTime !== null) {
+                    if (this.helicopterGroup && that.flightStartTime !== null) {
                         const now = performance.now();
-                        const elapsed = (now - this.flightStartTime) / 1000; // Convert to seconds
+                        const elapsed = (now - that.flightStartTime) / 1000; // Convert to seconds
                         const progress = (elapsed % this.flightDuration) / this.flightDuration; // Loop animation
 
                         
@@ -291,6 +292,7 @@ export default defineComponent({
                 this.camera.projectionMatrix = m.multiply(l);
                 this.renderer.resetState();
                 this.renderer.render(this.scene, this.camera);
+                this.map.triggerRepaint();
             },
             bearing: function (startLat, startLng, destLat, destLng) {
                 startLat = this.toRadians(startLat);
@@ -338,6 +340,32 @@ export default defineComponent({
         });
 
         window.customLayer = customLayer;
+    },
+    methods: {
+        playFlight() {
+            // if (!this.shouldRender) {
+            //     this.shouldRender = true;
+            //     const customLayer = (window as any).customLayer;
+            //     if (customLayer && customLayer.flightStartTime === null) {
+            //         // Restart from beginning if not already started
+            //         customLayer.flightStartTime = performance.now();
+            //     }
+            //     this.map?.triggerRepaint();
+            // }
+            this.shouldRender = true;
+            this.flightStartTime = performance.now();
+        },
+        pauseFlight() {
+            this.shouldRender = false;
+        },
+        restartFlight() {
+            const customLayer = (window as any).customLayer;
+            if (customLayer) {
+                customLayer.flightStartTime = performance.now();
+                this.shouldRender = true;
+                this.map?.triggerRepaint();
+            }
+        }
     }
 });
 </script>
