@@ -1,10 +1,5 @@
 <template>
     <div id="map"></div>
-    <div id="controls" class="controls">
-      <button @click="playFlight">Play</button>
-      <button @click="pauseFlight">Pause</button>
-      <button @click="restartFlight">Restart</button>
-    </div>
 </template>
 
 <script lang="ts">
@@ -34,7 +29,6 @@ export default defineComponent({
                 rotation: 0,
                 altitude: 12,
             },
-            shouldRender: true
         };
     },
 
@@ -47,7 +41,7 @@ export default defineComponent({
             pitch: 60,
             canvasContextAttributes: { antialias: true }
         });
-        window.map = map;
+
         // Define the route as a Turf.js LineString
         const route: turf.helpers.Feature<turf.helpers.LineString> = turf.lineString([
             [-81.4004, 28.5396],
@@ -176,86 +170,77 @@ export default defineComponent({
                 this.renderer.autoClear = false;
             },
             render: function (gl, args) {
-                if (that.shouldRender) {
-                    const now = performance.now();
-                    const elapsed = (now - this.flightStartTime) / 1000; // in seconds
+                const now = performance.now();
+                const elapsed = (now - this.flightStartTime) / 1000; // in seconds
 
-                    if (this.mixer) {
-                        this.mixer.setTime(elapsed % this.flightDuration); // loop within animation duration
-                    }
-
-
-                    // Fly along the route
-                    if (this.helicopterGroup && this.flightStartTime !== null) {
-                        const now = performance.now();
-                        const elapsed = (now - this.flightStartTime) / 1000; // Convert to seconds
-                        const progress = (elapsed % this.flightDuration) / this.flightDuration; // Loop animation
-
-                        
-                        if (progress < 0.51) {
-                            modelAltitude += 0.1;
-                        } else {
-                            modelAltitude -= 0.1;
-                        }
-
-                        if (progress > 0.99) {
-                            that.shouldRender = false;
-                        }
-                        
-
-                        // Calculate distance along route
-                        const distance = progress * this.routeLength;
-
-                        // Get position along route using Turf.js
-                        const pointOnLine = turf.along(this.route, distance, { units: 'meters' });
-                        const pointCoord = pointOnLine.geometry.coordinates;
-
-                        const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits();
-
-
-
-                        // Calculate direction for rotation
-                        const nextDistance = (distance + 10) % this.routeLength; // Look 5 meters ahead
-                        const nextPoint = turf.along(this.route, nextDistance, { units: 'meters' });
-                        const bearing = turf.bearing(pointOnLine, nextPoint);
-                        const yaw = (-bearing * Math.PI);
-
-
-
-
-                        modelAsMercatorCoordinate = maplibregl.MercatorCoordinate.fromLngLat(
-                            pointCoord,
-                            modelAltitude
-                        );
-
-                        // Transformation parameters
-                        modelTransform = {
-                            translateX: modelAsMercatorCoordinate.x,
-                            translateY: modelAsMercatorCoordinate.y,
-                            translateZ: modelAsMercatorCoordinate.z,
-                            rotateX: modelRotate[0],
-                            rotateY: yaw,
-                            rotateZ: modelRotate[2],
-                            scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
-                        };
-
-                        // this.map.flyTo({
-                        //     center: pointCoord,
-                        //     bearing: yaw, // helicopter heading
-                        //     pitch: 360,
-                        //     duration: 1000 // very short duration for smooth following
-                        // });
-                        
-                        this.map.setCenter(pointCoord);
-                        this.map.setBearing(yaw * (180 / Math.PI)); // convert to degrees
-                        // this.map.jumpTo({center: pointCoord, elevation: modelAltitude*10000});
-
-                    }
-
-
-                    
-                    
+                if (this.mixer) {
+                    this.mixer.setTime(elapsed % this.flightDuration); // loop within animation duration
                 }
+
+
+                // Fly along the route
+                if (this.helicopterGroup && this.flightStartTime !== null) {
+                    const now = performance.now();
+                    const elapsed = (now - this.flightStartTime) / 1000; // Convert to seconds
+                    const progress = (elapsed % this.flightDuration) / this.flightDuration; // Loop animation
+
+
+                    if (progress < 0.51) {
+                        modelAltitude += 0.1;
+                    } else {
+                        modelAltitude -= 0.1;
+                    }
+
+                    // Calculate distance along route
+                    const distance = progress * this.routeLength;
+
+                    // Get position along route using Turf.js
+                    const pointOnLine = turf.along(this.route, distance, { units: 'meters' });
+                    const pointCoord = pointOnLine.geometry.coordinates;
+
+                    const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits();
+
+
+
+                    // Calculate direction for rotation
+                    const nextDistance = (distance + 10) % this.routeLength; // Look 5 meters ahead
+                    const nextPoint = turf.along(this.route, nextDistance, { units: 'meters' });
+                    const bearing = turf.bearing(pointOnLine, nextPoint);
+                    const yaw = (-bearing * Math.PI);
+
+
+
+
+                    modelAsMercatorCoordinate = maplibregl.MercatorCoordinate.fromLngLat(
+                        pointCoord,
+                        modelAltitude
+                    );
+
+                    // Transformation parameters
+                    modelTransform = {
+                        translateX: modelAsMercatorCoordinate.x,
+                        translateY: modelAsMercatorCoordinate.y,
+                        translateZ: modelAsMercatorCoordinate.z,
+                        rotateX: modelRotate[0],
+                        rotateY: yaw,
+                        rotateZ: modelRotate[2],
+                        scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
+                    };
+
+                    // this.map.flyTo({
+                    //     center: pointCoord,
+                    //     bearing: yaw, // helicopter heading
+                    //     pitch: 360,
+                    //     duration: 1000 // very short duration for smooth following
+                    // });
+
+                    this.map.setCenter(pointCoord);
+                    this.map.setBearing(yaw * (180 / Math.PI)); // convert to degrees
+
+
+                }
+
+
                 // Apply model transformations
                 const rotationX = new THREE.Matrix4().makeRotationAxis(
                     new THREE.Vector3(1, 0, 0),
@@ -291,6 +276,7 @@ export default defineComponent({
                 this.camera.projectionMatrix = m.multiply(l);
                 this.renderer.resetState();
                 this.renderer.render(this.scene, this.camera);
+                this.map.triggerRepaint();
             },
             bearing: function (startLat, startLng, destLat, destLng) {
                 startLat = this.toRadians(startLat);
@@ -336,8 +322,6 @@ export default defineComponent({
         map.on('style.load', () => {
             map.addLayer(customLayer);
         });
-
-        window.customLayer = customLayer;
     }
 });
 </script>
@@ -349,21 +333,5 @@ export default defineComponent({
     position: absolute;
     top: 0;
     left: 0;
-}
-.controls {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 999;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px;
-  border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-}
-.controls button {
-  margin: 0 4px;
-  padding: 6px 12px;
-  font-weight: bold;
-  cursor: pointer;
 }
 </style>
