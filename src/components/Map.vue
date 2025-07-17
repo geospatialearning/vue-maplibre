@@ -2,8 +2,6 @@
     <div id="map"></div>
     <div id="controls" class="controls">
       <button @click="playFlight">Play</button>
-      <button @click="pauseFlight">Pause</button>
-      <button @click="restartFlight">Restart</button>
     </div>
 </template>
 
@@ -14,6 +12,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as turf from '@turf/turf';
+import type * as GeoJSON from 'geojson';
 import helicopterModelUrl from '@/assets/3d_models/low_poly_helicopter.glb?url';
 
 export default defineComponent({
@@ -32,7 +31,7 @@ export default defineComponent({
                 url: helicopterModelUrl,
                 scale: 2,
                 rotation: 0,
-                altitude: 12,
+                altitude: 10,
             },
             shouldRender: false,
             flightStartTime: 0
@@ -48,8 +47,7 @@ export default defineComponent({
             pitch: 60,
             canvasContextAttributes: { antialias: true }
         });
-        // Define the route as a Turf.js LineString
-        const route: turf.helpers.Feature<turf.helpers.LineString> = turf.lineString([
+        const route: GeoJSON.Feature<GeoJSON.LineString> = turf.lineString([
             [-81.4004, 28.5396],
             [-81.4055, 28.541425]
         ]);
@@ -94,15 +92,7 @@ export default defineComponent({
         );
 
         // Transformation parameters
-        let modelTransform = {
-            translateX: modelAsMercatorCoordinate.x,
-            translateY: modelAsMercatorCoordinate.y,
-            translateZ: modelAsMercatorCoordinate.z,
-            rotateX: modelRotate[0],
-            rotateY: modelRotate[1],
-            rotateZ: modelRotate[2],
-            scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
-        };
+        let modelTransform = this.modelTransform(modelAsMercatorCoordinate, modelRotate[0], modelRotate[1], modelRotate[2]);
 
         // Store reference to component
         const that = this;
@@ -113,26 +103,27 @@ export default defineComponent({
             type: 'custom',
             renderingMode: '3d',
             onAdd: function (map, gl) {
-                this.clock = new THREE.Clock();
-                that.flightStartTime = null;
-                this.flightDuration = 15; // seconds for full route
-                this.helicopter = null;
-                this.helicopterGroup = null;
-                this.camera = new THREE.Camera();
-                this.scene = new THREE.Scene();
-                this.route = route;
-                this.routeLength = routeLength;
+                const self = this as any; // Add this line
+
+                that.flightStartTime = 0;
+                self.flightDuration = 15; // seconds for full route
+                self.helicopter = null;
+                self.helicopterGroup = null;
+                self.camera = new THREE.Camera();
+                self.scene = new THREE.Scene();
+                self.route = route;
+                self.routeLength = routeLength;
 
                 // Add lighting
                 const directionalLight = new THREE.DirectionalLight(0xffffff);
                 directionalLight.position.set(0, -70, 100).normalize();
-                this.scene.add(directionalLight);
+                self.scene.add(directionalLight);
 
                 const directionalLight2 = new THREE.DirectionalLight(0xffffff);
                 directionalLight2.position.set(0, 70, 100).normalize();
-                this.scene.add(directionalLight2);
+                self.scene.add(directionalLight2);
 
-                this.mixer = null;
+                self.mixer = null;
 
                 const loader = new GLTFLoader();
                 loader.load(
@@ -144,21 +135,19 @@ export default defineComponent({
                             that.helicopterConfig.scale,
                             that.helicopterConfig.scale
                         );
-                        gltf.scene.rotation.copy(that.helicopterConfig.rotation);
+                        gltf.scene.rotation.y = that.helicopterConfig.rotation;
 
                         // Create group for helicopter
-                        this.helicopterGroup = new THREE.Group();
-                        this.helicopter = gltf.scene;
-                        this.helicopterGroup.add(this.helicopter);
-                        this.scene.add(this.helicopterGroup);
-                        window.helicopterGroup = this.helicopterGroup;
-                        window.helicopter = this.helicopter;
+                        self.helicopterGroup = new THREE.Group();
+                        self.helicopter = gltf.scene;
+                        self.helicopterGroup.add(self.helicopter);
+                        self.scene.add(self.helicopterGroup);
 
                         // Setup animation mixer
                         if (gltf.animations && gltf.animations.length > 0) {
-                            this.mixer = new THREE.AnimationMixer(gltf.scene);
+                            self.mixer = new THREE.AnimationMixer(gltf.scene);
                             gltf.animations.forEach((clip) => {
-                                this.mixer.clipAction(clip).play();
+                                self.mixer.clipAction(clip).play();
                             });
                         }
 
@@ -167,30 +156,30 @@ export default defineComponent({
                     }
                 );
 
-                this.map = map;
-                this.renderer = new THREE.WebGLRenderer({
+                self.map = map;
+                self.renderer = new THREE.WebGLRenderer({
                     canvas: map.getCanvas(),
                     context: gl,
                     antialias: true
                 });
-                this.renderer.autoClear = false;
+                self.renderer.autoClear = false;
             },
             render: function (gl, args) {
-                console.log(that.shouldRender)
+                const self = this as any; // Add this line
                 if (that.shouldRender) {
                     const now = performance.now();
                     const elapsed = (now - that.flightStartTime) / 1000; // in seconds
 
-                    if (this.mixer) {
-                        this.mixer.setTime(elapsed % this.flightDuration); // loop within animation duration
+                    if (self.mixer) {
+                        self.mixer.setTime(elapsed % self.flightDuration); // loop within animation duration
                     }
 
 
                     // Fly along the route
-                    if (this.helicopterGroup && that.flightStartTime !== null) {
+                    if (self.helicopterGroup && that.flightStartTime !== null) {
                         const now = performance.now();
                         const elapsed = (now - that.flightStartTime) / 1000; // Convert to seconds
-                        const progress = (elapsed % this.flightDuration) / this.flightDuration; // Loop animation
+                        const progress = (elapsed % self.flightDuration) / self.flightDuration; // Loop animation
 
                         
                         if (progress < 0.51) {
@@ -205,19 +194,19 @@ export default defineComponent({
                         
 
                         // Calculate distance along route
-                        const distance = progress * this.routeLength;
+                        const distance = progress * self.routeLength;
 
                         // Get position along route using Turf.js
-                        const pointOnLine = turf.along(this.route, distance, { units: 'meters' });
-                        const pointCoord = pointOnLine.geometry.coordinates;
+                        const pointOnLine = turf.along(self.route, distance, { units: 'meters' });
+                        const pointCoord = pointOnLine.geometry.coordinates as [number, number];
 
                         const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits();
 
 
 
                         // Calculate direction for rotation
-                        const nextDistance = (distance + 10) % this.routeLength; // Look 5 meters ahead
-                        const nextPoint = turf.along(this.route, nextDistance, { units: 'meters' });
+                        const nextDistance = (distance + 10) % self.routeLength; // Look 5 meters ahead
+                        const nextPoint = turf.along(self.route, nextDistance, { units: 'meters' });
                         const bearing = turf.bearing(pointOnLine, nextPoint);
                         const yaw = (-bearing * Math.PI);
 
@@ -230,108 +219,21 @@ export default defineComponent({
                         );
 
                         // Transformation parameters
-                        modelTransform = {
-                            translateX: modelAsMercatorCoordinate.x,
-                            translateY: modelAsMercatorCoordinate.y,
-                            translateZ: modelAsMercatorCoordinate.z,
-                            rotateX: modelRotate[0],
-                            rotateY: yaw,
-                            rotateZ: modelRotate[2],
-                            scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
-                        };
-
-                        // this.map.flyTo({
-                        //     center: pointCoord,
-                        //     bearing: yaw, // helicopter heading
-                        //     pitch: 360,
-                        //     duration: 1000 // very short duration for smooth following
-                        // });
+                        modelTransform = that.modelTransform(modelAsMercatorCoordinate, modelRotate[0], yaw, modelRotate[2]);
                         
-                        this.map.setCenter(pointCoord);
-                        this.map.setBearing(yaw * (180 / Math.PI)); // convert to degrees
-                        // this.map.jumpTo({center: pointCoord, elevation: modelAltitude*10000});
+                        self.map.setCenter(pointCoord);
+                        self.map.setBearing(yaw * (180 / Math.PI)); // convert to degrees
 
-                    }
-
-
-                    
+                    }                    
                     
                 }
-                // Apply model transformations
-                const rotationX = new THREE.Matrix4().makeRotationAxis(
-                    new THREE.Vector3(1, 0, 0),
-                    modelTransform.rotateX
-                );
-                const rotationY = new THREE.Matrix4().makeRotationAxis(
-                    new THREE.Vector3(0, 1, 0),
-                    modelTransform.rotateY
-                );
-                const rotationZ = new THREE.Matrix4().makeRotationAxis(
-                    new THREE.Vector3(0, 0, 1),
-                    modelTransform.rotateZ
-                );
 
-                const m = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);
-                const l = new THREE.Matrix4()
-                    .makeTranslation(
-                        modelTransform.translateX,
-                        modelTransform.translateY,
-                        modelTransform.translateZ
-                    )
-                    .scale(
-                        new THREE.Vector3(
-                            modelTransform.scale,
-                            -modelTransform.scale,
-                            modelTransform.scale
-                        )
-                    )
-                    .multiply(rotationX)
-                    .multiply(rotationY)
-                    .multiply(rotationZ);
+                // Apply model transformations                
 
-                this.camera.projectionMatrix = m.multiply(l);
-                this.renderer.resetState();
-                this.renderer.render(this.scene, this.camera);
-                this.map.triggerRepaint();
-            },
-            bearing: function (startLat, startLng, destLat, destLng) {
-                startLat = this.toRadians(startLat);
-                startLng = this.toRadians(startLng);
-                destLat = this.toRadians(destLat);
-                destLng = this.toRadians(destLng);
-                let y = Math.sin(destLng - startLng) * Math.cos(destLat);
-                let x = Math.cos(startLat) * Math.sin(destLat) -
-                    Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
-                let brng = Math.atan2(y, x);
-                brng = this.toDegrees(brng);
-                return (brng + 360) % 360;
-            },
-            toRadians: function (degrees) {
-                return degrees * Math.PI / 180;
-            },
-            // Converts from radians to degrees.
-            toDegrees: function (radians) {
-                return radians * 180 / Math.PI;
-            },
-            mercatorToNormalized: function (longitude, latitude) {
-                const PI = Math.PI;
-                const normalizedLongitude = longitude / 180; // Scale longitude to -1 to 1 range
-                const normalizedLatitude = Math.log(Math.tan((PI / 4) + (latitude * PI / 360))) / PI; // Mercator projection for latitude
-
-                return {
-                    x: normalizedLongitude,
-                    y: normalizedLatitude
-                };
-            },
-            normalizedToThreeJS: function (normalizedX, normalizedY, sceneWidth, sceneHeight) {
-                // Assuming the center of your Three.js scene is (0,0) for the map
-                const threeJS_X = normalizedX * (sceneWidth / 2);
-                const threeJS_Y = normalizedY * (sceneHeight / 2); // Adjust sign if y-axis is inverted in your Three.js setup
-
-                return {
-                    x: threeJS_X,
-                    y: threeJS_Y
-                };
+                self.camera.projectionMatrix = that.modelTransformation(modelTransform, args.defaultProjectionData.mainMatrix);
+                self.renderer.resetState();
+                self.renderer.render(self.scene, self.camera);
+                self.map.triggerRepaint();
             }
         };
 
@@ -339,32 +241,55 @@ export default defineComponent({
             map.addLayer(customLayer);
         });
 
-        window.customLayer = customLayer;
     },
     methods: {
         playFlight() {
-            // if (!this.shouldRender) {
-            //     this.shouldRender = true;
-            //     const customLayer = (window as any).customLayer;
-            //     if (customLayer && customLayer.flightStartTime === null) {
-            //         // Restart from beginning if not already started
-            //         customLayer.flightStartTime = performance.now();
-            //     }
-            //     this.map?.triggerRepaint();
-            // }
             this.shouldRender = true;
             this.flightStartTime = performance.now();
         },
-        pauseFlight() {
-            this.shouldRender = false;
-        },
-        restartFlight() {
-            const customLayer = (window as any).customLayer;
-            if (customLayer) {
-                customLayer.flightStartTime = performance.now();
-                this.shouldRender = true;
-                this.map?.triggerRepaint();
+        modelTransform(modelAsMercatorCoordinate: maplibregl.MercatorCoordinate, rotateX: number, rotateY: number, rotateZ: number) {
+            return {
+                translateX: modelAsMercatorCoordinate.x,
+                translateY: modelAsMercatorCoordinate.y,
+                translateZ: modelAsMercatorCoordinate.z,
+                rotateX: rotateX,
+                rotateY: rotateY,
+                rotateZ: rotateZ,
+                scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
             }
+        },
+        modelTransformation(modelTransform: { translateX: any; translateY: any; translateZ: any; rotateX: any; rotateY: any; rotateZ: any; scale: any; }, mainMatrix: ArrayLike<number>) {
+            const rotationX = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(1, 0, 0),
+                modelTransform.rotateX
+            );
+            const rotationY = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(0, 1, 0),
+                modelTransform.rotateY
+            );
+            const rotationZ = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(0, 0, 1),
+                modelTransform.rotateZ
+            );
+
+            const m = new THREE.Matrix4().fromArray(mainMatrix);
+            const l = new THREE.Matrix4()
+                .makeTranslation(
+                    modelTransform.translateX,
+                    modelTransform.translateY,
+                    modelTransform.translateZ
+                )
+                .scale(
+                    new THREE.Vector3(
+                        modelTransform.scale,
+                        -modelTransform.scale,
+                        modelTransform.scale
+                    )
+                )
+                .multiply(rotationX)
+                .multiply(rotationY)
+                .multiply(rotationZ);
+            return m.multiply(l);
         }
     }
 });
